@@ -77,7 +77,6 @@
 #include <linux/string.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/slab.h>
-#include <linux/locallock.h>
 #include <net/snmp.h>
 #include <net/ip.h>
 #include <net/route.h>
@@ -205,8 +204,6 @@ static const struct icmp_control icmp_pointers[NR_ICMP_TYPES+1];
  *
  *	On SMP we have one ICMP socket per-cpu.
  */
-static DEFINE_LOCAL_IRQ_LOCK(icmp_sk_lock);
-
 static struct sock *icmp_sk(struct net *net)
 {
 	return *this_cpu_ptr(net->ipv4.icmp_sk);
@@ -426,7 +423,6 @@ static void icmp_reply(struct icmp_bxm *icmp_param, struct sk_buff *skb)
 
 	/* Needed by both icmp_global_allow and icmp_xmit_lock */
 	local_bh_disable();
-	local_lock(icmp_sk_lock);
 
 	/* global icmp_msgs_per_sec */
 	if (!icmpv4_global_allow(net, type, code))
@@ -471,7 +467,6 @@ static void icmp_reply(struct icmp_bxm *icmp_param, struct sk_buff *skb)
 out_unlock:
 	icmp_xmit_unlock(sk);
 out_bh_enable:
-	local_unlock(icmp_sk_lock);
 	local_bh_enable();
 }
 
@@ -687,7 +682,6 @@ void __icmp_send(struct sk_buff *skb_in, int type, int code, __be32 info,
 
 	/* Needed by both icmp_global_allow and icmp_xmit_lock */
 	local_bh_disable();
-	local_lock(icmp_sk_lock);
 
 	/* Check global sysctl_icmp_msgs_per_sec ratelimit, unless
 	 * incoming dev is loopback.  If outgoing dev change to not be
@@ -783,7 +777,6 @@ ende:
 out_unlock:
 	icmp_xmit_unlock(sk);
 out_bh_enable:
-	local_unlock(icmp_sk_lock);
 	local_bh_enable();
 out:;
 }
