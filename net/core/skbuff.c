@@ -63,7 +63,6 @@
 #include <linux/errqueue.h>
 #include <linux/prefetch.h>
 #include <linux/if_vlan.h>
-#include <linux/locallock.h>
 
 #include <net/protocol.h>
 #include <net/dst.h>
@@ -334,7 +333,6 @@ struct napi_alloc_cache {
 
 static DEFINE_PER_CPU(struct page_frag_cache, netdev_alloc_cache);
 static DEFINE_PER_CPU(struct napi_alloc_cache, napi_alloc_cache);
-static DEFINE_LOCAL_IRQ_LOCK(netdev_alloc_lock);
 
 static void *__netdev_alloc_frag(unsigned int fragsz, gfp_t gfp_mask)
 {
@@ -345,10 +343,10 @@ static void *__netdev_alloc_frag(unsigned int fragsz, gfp_t gfp_mask)
 	if (IS_ENABLED(CONFIG_FORCE_ALLOC_FROM_DMA_ZONE))
 		gfp_mask |= GFP_DMA;
 
-	local_lock_irqsave(netdev_alloc_lock, flags);
+	local_irq_save(flags);
 	nc = this_cpu_ptr(&netdev_alloc_cache);
 	data = page_frag_alloc(nc, fragsz, gfp_mask);
-	local_unlock_irqrestore(netdev_alloc_lock, flags);
+	local_irq_restore(flags);
 	return data;
 }
 
@@ -427,13 +425,13 @@ struct sk_buff *__netdev_alloc_skb(struct net_device *dev, unsigned int len,
 	if (sk_memalloc_socks())
 		gfp_mask |= __GFP_MEMALLOC;
 
-	local_lock_irqsave(netdev_alloc_lock, flags);
+	local_irq_save(flags);
 
 	nc = this_cpu_ptr(&netdev_alloc_cache);
 	data = page_frag_alloc(nc, len, gfp_mask);
 	pfmemalloc = nc->pfmemalloc;
 
-	local_unlock_irqrestore(netdev_alloc_lock, flags);
+	local_irq_restore(flags);
 
 	if (unlikely(!data))
 		return NULL;
